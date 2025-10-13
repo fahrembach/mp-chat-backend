@@ -19,28 +19,299 @@ model User {
   passwordHash String
   email        String?
   name         String?
+  phone        String?
+  bio          String?
+  avatar       String?
   isOnline     Boolean  @default(false)
   lastSeen     DateTime @default(now())
+  status       String   @default("available") // available, busy, away, invisible
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
+  // Relacionamentos de mensagens
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  
+  // Relacionamentos de grupos
+  createdGroups    Group[] @relation("GroupCreator")
+  groupMemberships GroupMember[]
+  
+  // Relacionamentos de status
+  statusUpdates    StatusUpdate[]
+  
+  // Relacionamentos de comunidades
+  createdCommunities Community[] @relation("CommunityCreator")
+  communityMemberships CommunityMember[]
+  
+  // Relacionamentos de chamadas
+  initiatedCalls  Call[] @relation("CallInitiator")
+  receivedCalls   Call[] @relation("CallReceiver")
+  
+  // Relacionamentos de configurações
+  userSettings    UserSettings?
+  
+  // Relacionamentos de notificações
+  notifications   Notification[]
+  
+  // Relacionamentos de bloqueios
+  blockedUsers    BlockedUser[] @relation("Blocker")
+  blockedBy      BlockedUser[] @relation("Blocked")
   
   @@map("users")
 }
 
 model Message {
-  id         String   @id @default(cuid())
-  content    String
-  type       String   @default("text")
-  senderId   String
-  receiverId String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(cuid())
+  content     String
+  type        String   @default("text") // text, image, video, audio, file, location, contact, sticker, gif
+  senderId    String
+  receiverId  String?
+  groupId     String?
+  replyToId   String?
+  forwardedFromId String?
+  isEdited    Boolean  @default(false)
+  isDeleted   Boolean  @default(false)
+  isTemporary Boolean  @default(false)
+  expiresAt   DateTime?
+  metadata    String?  // JSON para dados extras (localização, arquivos, etc)
+  status      String   @default("sent") // sent, delivered, read
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
-  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User?    @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  replyTo     Message? @relation("MessageReply", fields: [replyToId], references: [id])
+  replies     Message[] @relation("MessageReply")
+  forwardedFrom Message? @relation("MessageForward", fields: [forwardedFromId], references: [id])
+  forwardedMessages Message[] @relation("MessageForward")
+  
+  // Reações
+  reactions   MessageReaction[]
   
   @@map("messages")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  creatorId   String
+  isPrivate   Boolean  @default(false)
+  inviteCode  String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  creator     User     @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+  messages    Message[]
+  
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("member") // admin, member
+  joinedAt  DateTime @default(now())
+  
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+model StatusUpdate {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String
+  type      String   @default("text") // text, image, video
+  mediaUrl  String?
+  views     Int      @default(0)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  viewers   StatusViewer[]
+  
+  @@map("status_updates")
+}
+
+model StatusViewer {
+  id             String   @id @default(cuid())
+  statusUpdateId String
+  userId         String
+  viewedAt       DateTime @default(now())
+  
+  statusUpdate   StatusUpdate @relation(fields: [statusUpdateId], references: [id], onDelete: Cascade)
+  
+  @@unique([statusUpdateId, userId])
+  @@map("status_viewers")
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  creatorId   String
+  isPrivate   Boolean  @default(false)
+  inviteCode  String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  creator     User     @relation("CommunityCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members     CommunityMember[]
+  
+  @@map("communities")
+}
+
+model CommunityMember {
+  id           String   @id @default(cuid())
+  communityId  String
+  userId       String
+  role         String   @default("member") // admin, moderator, member
+  joinedAt     DateTime @default(now())
+  
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([communityId, userId])
+  @@map("community_members")
+}
+
+model Call {
+  id          String   @id @default(cuid())
+  initiatorId String
+  receiverId  String?
+  groupId     String?
+  type        String   @default("audio") // audio, video, screen_share
+  status      String   @default("ringing") // ringing, active, ended, missed
+  startedAt   DateTime?
+  endedAt     DateTime?
+  duration    Int?     // em segundos
+  createdAt   DateTime @default(now())
+  
+  initiator   User     @relation("CallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  receiver    User?    @relation("CallReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  participants CallParticipant[]
+  
+  @@map("calls")
+}
+
+model CallParticipant {
+  id        String   @id @default(cuid())
+  callId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+  isMuted   Boolean  @default(false)
+  isSpeaker Boolean  @default(false)
+  
+  call      Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  
+  @@unique([callId, userId])
+  @@map("call_participants")
+}
+
+model UserSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  theme                 String   @default("dark") // dark, light, system
+  language              String   @default("pt-BR")
+  notifications         Boolean  @default(true)
+  soundEnabled          Boolean  @default(true)
+  vibrationEnabled      Boolean  @default(true)
+  readReceipts          Boolean  @default(true)
+  lastSeen              Boolean  @default(true)
+  profilePhoto          Boolean  @default(true)
+  statusPrivacy         String   @default("contacts") // everyone, contacts, nobody
+  groupInvitePrivacy    String   @default("contacts") // everyone, contacts, nobody
+  callPrivacy           String   @default("contacts") // everyone, contacts, nobody
+  mediaAutoDownload     Boolean  @default(true)
+  mediaDownloadWifiOnly  Boolean  @default(true)
+  fontSize              String   @default("medium") // small, medium, large
+  accessibilityMode     Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_settings")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String   // message, call, group_invite, etc
+  data      String?  // JSON com dados extras
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("notifications")
+}
+
+model BlockedUser {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  
+  @@unique([blockerId, blockedId])
+  @@map("blocked_users")
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
+}
+
+model FileUpload {
+  id        String   @id @default(cuid())
+  userId    String
+  fileName  String
+  filePath  String
+  fileSize  Int
+  mimeType  String
+  uploadedAt DateTime @default(now())
+  
+  @@map("file_uploads")
+}
+
+model Sticker {
+  id        String   @id @default(cuid())
+  name      String
+  category  String
+  url       String
+  createdAt DateTime @default(now())
+  
+  @@map("stickers")
+}
+
+model Gif {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  previewUrl String?
+  createdAt DateTime @default(now())
+  
+  @@map("gifs")
 }

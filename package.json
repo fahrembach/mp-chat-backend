@@ -1,7 +1,7 @@
 {
   "name": "mp-chat-backend",
   "version": "1.0.0",
-  "description": "Backend API server for m-p-chat Flutter application using SQLite and Socket.IO.",
+  "description": "Backend API server for m-p-chat Flutter application using SQLite and Socket.IO with complete features.",
   "main": "server.ts",
   "scripts": {
     "dev": "nodemon --exec \"npx tsx server.ts\" --watch server.ts --watch prisma --ext ts",
@@ -22,11 +22,24 @@
     "socket.io": "^4.8.1",
     "tsx": "^4.20.3",
     "uuid": "^11.1.0",
-    "zod": "^4.0.2"
+    "zod": "^4.0.2",
+    "multer": "^1.4.5-lts.1",
+    "sharp": "^0.33.5",
+    "crypto": "^1.0.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "express": "^4.21.1",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "rate-limiter-flexible": "^5.0.3"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/uuid": "^10.0.0",
+    "@types/multer": "^1.4.12",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/cors": "^2.8.17",
     "nodemon": "^3.1.10",
     "typescript": "^5"
   },
