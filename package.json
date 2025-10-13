@@ -1,0 +1,36 @@
+{
+  "name": "mp-chat-backend",
+  "version": "1.0.0",
+  "description": "Backend API server for m-p-chat Flutter application using SQLite and Socket.IO.",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "nodemon --exec \"npx tsx server.ts\" --watch server.ts --watch prisma --ext ts",
+    "start": "NODE_ENV=production tsx server.ts",
+    "build": "prisma generate",
+    "dev:log": "nodemon --exec \"npx tsx server.ts\" --watch server.ts --watch prisma --ext ts > dev.log 2>&1",
+    "db:push": "prisma db push",
+    "db:push:reset": "prisma db push --force-reset",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.11.1",
+    "axios": "^1.10.0",
+    "prisma": "^6.11.1",
+    "socket.io": "^4.8.1",
+    "tsx": "^4.20.3",
+    "uuid": "^11.1.0",
+    "zod": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/uuid": "^10.0.0",
+    "nodemon": "^3.1.10",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
