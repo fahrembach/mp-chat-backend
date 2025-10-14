@@ -125,30 +125,33 @@ model GroupMember {
 }
 
 model StatusUpdate {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String
-  type      String   @default("text") // text, image, video
-  mediaUrl  String?
-  views     Int      @default(0)
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  content      String
+  type         String   @default("text") // text, image, video, audio
+  mediaUrl     String?
+  thumbnailUrl String?
+  duration     Int?     // Para vídeos e áudios em segundos
+  views        Int      @default(0)
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  viewers   StatusViewer[]
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  viewers      StatusViewer[]
   
   @@map("status_updates")
 }
 
 model StatusViewer {
-  id             String   @id @default(cuid())
-  statusUpdateId String
-  userId         String
-  viewedAt       DateTime @default(now())
+  id        String   @id @default(cuid())
+  statusId  String
+  userId    String
+  viewedAt  DateTime @default(now())
   
-  statusUpdate   StatusUpdate @relation(fields: [statusUpdateId], references: [id], onDelete: Cascade)
+  status    StatusUpdate @relation(fields: [statusId], references: [id], onDelete: Cascade)
   
-  @@unique([statusUpdateId, userId])
+  @@unique([statusId, userId])
   @@map("status_viewers")
 }
 
@@ -185,17 +188,18 @@ model CommunityMember {
 
 model Call {
   id          String   @id @default(cuid())
-  initiatorId String
+  callerId    String
   receiverId  String?
   groupId     String?
   type        String   @default("audio") // audio, video, screen_share
-  status      String   @default("ringing") // ringing, active, ended, missed
-  startedAt   DateTime?
-  endedAt     DateTime?
+  status      String   @default("ringing") // incoming, outgoing, missed, rejected, ended
+  startTime   DateTime @default(now())
+  endTime     DateTime?
   duration    Int?     // em segundos
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
-  initiator   User     @relation("CallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  caller      User     @relation("CallInitiator", fields: [callerId], references: [id], onDelete: Cascade)
   receiver    User?    @relation("CallReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   participants CallParticipant[]
   

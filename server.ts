@@ -7,9 +7,42 @@ import { setupSocket } from './lib/socket';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as multer from 'multer';
+import * as sharp from 'sharp';
 
 const port = process.env.PORT || 3001;
 const hostname = '0.0.0.0';
+
+// Configurar multer para upload de arquivos
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${uuidv4()}-${file.originalname}`;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|mp3|wav|m4a/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Tipo de arquivo não permitido'));
+    }
+  }
+});
 
 // --- Helper Functions ---
 const getBody = (req: IncomingMessage): Promise<any> => {
@@ -754,6 +787,276 @@ const requestHandler = async (req: IncomingMessage, res: ServerResponse) => {
         
         console.log(`   [API] ✅ Reaction removed from message ${messageId}.`);
         return sendJson(res, 200, { message: 'Reaction removed successfully' });
+    }
+
+    // --- File Upload Routes ---
+    if (path === '/api/upload' && method === 'POST') {
+        const userId = getAuthUserId(req);
+        if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+
+        console.log('-> [UPLOAD] Processing file upload...');
+        
+        // Usar multer para processar upload
+        upload.single('file')(req as any, res as any, async (err: any) => {
+            if (err) {
+                console.error('[UPLOAD] Error:', err);
+                return sendJson(res, 400, { error: err.message });
+            }
+
+            const file = (req as any).file;
+            if (!file) {
+                return sendJson(res, 400, { error: 'Nenhum arquivo enviado' });
+            }
+
+            try {
+                const fileUrl = `/uploads/${file.filename}`;
+                const fileType = file.mimetype.split('/')[0]; // image, video, audio
+                
+                // Se for imagem, gerar thumbnail
+                let thumbnailUrl = null;
+                if (fileType === 'image') {
+                    const thumbnailName = `thumb-${file.filename}`;
+                    const thumbnailPath = path.join(__dirname, 'uploads', thumbnailName);
+                    
+                    await sharp(file.path)
+                        .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: 80 })
+                        .toFile(thumbnailPath);
+                    
+                    thumbnailUrl = `/uploads/${thumbnailName}`;
+                }
+
+                console.log(`   [UPLOAD] ✅ File uploaded: ${file.filename}`);
+                return sendJson(res, 200, {
+                    url: fileUrl,
+                    thumbnailUrl,
+                    filename: file.originalname,
+                    size: file.size,
+                    type: fileType,
+                    mimeType: file.mimetype
+                });
+            } catch (error) {
+                console.error('[UPLOAD] Processing error:', error);
+                return sendJson(res, 500, { error: 'Erro ao processar arquivo' });
+            }
+        });
+        return;
+    }
+
+    // --- Status Routes ---
+    if (path.startsWith('/api/status')) {
+        const userId = getAuthUserId(req);
+        if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+
+        if (path === '/api/status' && method === 'GET') {
+            console.log('-> [STATUS] Fetching all statuses...');
+            const statuses = await db.statusUpdate.findMany({
+                where: {
+                    expiresAt: { gt: new Date() }, // Only non-expired statuses
+                },
+                include: {
+                    user: true,
+                    viewers: {
+                        include: { user: true }
+                    }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+            
+            console.log(`   [STATUS] ✅ Found ${statuses.length} statuses.`);
+            return sendJson(res, 200, statuses);
+        }
+
+        if (path === '/api/status' && method === 'POST') {
+            console.log('-> [STATUS] Creating new status...');
+            const body = await getBody(req);
+            const parsed = StatusUpdateSchema.safeParse(body);
+            if (!parsed.success) return sendJson(res, 400, { error: 'Invalid input', details: parsed.error.issues });
+            
+            const { content, type, mediaUrl, expiresAt } = parsed.data;
+            const expiresAtDate = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours default
+            
+            const status = await db.statusUpdate.create({
+                data: {
+                    id: uuidv4(),
+                    userId,
+                    content,
+                    type,
+                    mediaUrl,
+                    expiresAt: expiresAtDate,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                },
+                include: {
+                    user: true,
+                    viewers: true
+                }
+            });
+            
+            console.log(`   [STATUS] ✅ Status created with ID: ${status.id}`);
+            return sendJson(res, 201, status);
+        }
+
+        if (path.match(/^\/api\/status\/[^\/]+$/) && method === 'DELETE') {
+            const statusId = path.split('/')[3];
+            console.log(`-> [STATUS] Deleting status ${statusId}...`);
+            
+            const status = await db.statusUpdate.findFirst({
+                where: { id: statusId, userId }
+            });
+            
+            if (!status) return sendJson(res, 404, { error: 'Status not found' });
+            
+            await db.statusUpdate.delete({ where: { id: statusId } });
+            console.log(`   [STATUS] ✅ Status ${statusId} deleted.`);
+            return sendJson(res, 200, { message: 'Status deleted successfully' });
+        }
+
+        if (path.match(/^\/api\/status\/[^\/]+\/view$/) && method === 'POST') {
+            const statusId = path.split('/')[3];
+            console.log(`-> [STATUS] Viewing status ${statusId}...`);
+            
+            const status = await db.statusUpdate.findUnique({
+                where: { id: statusId },
+                include: { viewers: true }
+            });
+            
+            if (!status) return sendJson(res, 404, { error: 'Status not found' });
+            
+            // Check if already viewed
+            const existingView = await db.statusViewer.findFirst({
+                where: { statusId, userId }
+            });
+            
+            if (!existingView) {
+                await db.statusViewer.create({
+                    data: {
+                        id: uuidv4(),
+                        statusId,
+                        userId,
+                        viewedAt: new Date()
+                    }
+                });
+                
+                // Update view count
+                await db.statusUpdate.update({
+                    where: { id: statusId },
+                    data: { views: { increment: 1 } }
+                });
+            }
+            
+            console.log(`   [STATUS] ✅ Status ${statusId} viewed.`);
+            return sendJson(res, 200, { message: 'Status viewed successfully' });
+        }
+    }
+
+    // --- Call History Routes ---
+    if (path.startsWith('/api/calls')) {
+        const userId = getAuthUserId(req);
+        if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+
+        if (path === '/api/calls/history' && method === 'GET') {
+            console.log('-> [CALLS] Fetching call history...');
+            const calls = await db.call.findMany({
+                where: {
+                    OR: [
+                        { callerId: userId },
+                        { receiverId: userId }
+                    ]
+                },
+                include: {
+                    caller: true,
+                    receiver: true,
+                    participants: {
+                        include: { user: true }
+                    }
+                },
+                orderBy: { startTime: 'desc' }
+            });
+            
+            console.log(`   [CALLS] ✅ Found ${calls.length} calls.`);
+            return sendJson(res, 200, calls);
+        }
+
+        if (path === '/api/calls' && method === 'POST') {
+            console.log('-> [CALLS] Recording new call...');
+            const body = await getBody(req);
+            const { callerId, receiverId, type, status, startTime, endTime, duration } = body;
+            
+            const call = await db.call.create({
+                data: {
+                    id: uuidv4(),
+                    callerId,
+                    receiverId,
+                    type,
+                    status,
+                    startTime: new Date(startTime),
+                    endTime: endTime ? new Date(endTime) : null,
+                    duration,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                },
+                include: {
+                    caller: true,
+                    receiver: true,
+                    participants: true
+                }
+            });
+            
+            console.log(`   [CALLS] ✅ Call recorded with ID: ${call.id}`);
+            return sendJson(res, 201, call);
+        }
+
+        if (path.match(/^\/api\/calls\/[^\/]+$/) && method === 'PATCH') {
+            const callId = path.split('/')[3];
+            console.log(`-> [CALLS] Updating call ${callId}...`);
+            
+            const body = await getBody(req);
+            const { status, endTime, duration } = body;
+            
+            const call = await db.call.update({
+                where: { id: callId },
+                data: {
+                    status,
+                    endTime: endTime ? new Date(endTime) : undefined,
+                    duration,
+                    updatedAt: new Date()
+                },
+                include: {
+                    caller: true,
+                    receiver: true,
+                    participants: true
+                }
+            });
+            
+            console.log(`   [CALLS] ✅ Call ${callId} updated.`);
+            return sendJson(res, 200, call);
+        }
+
+        if (path.match(/^\/api\/calls\/[^\/]+$/) && method === 'DELETE') {
+            const callId = path.split('/')[3];
+            console.log(`-> [CALLS] Deleting call ${callId}...`);
+            
+            await db.call.delete({ where: { id: callId } });
+            console.log(`   [CALLS] ✅ Call ${callId} deleted.`);
+            return sendJson(res, 200, { message: 'Call deleted successfully' });
+        }
+
+        if (path === '/api/calls/clear' && method === 'DELETE') {
+            console.log('-> [CALLS] Clearing call history...');
+            
+            await db.call.deleteMany({
+                where: {
+                    OR: [
+                        { callerId: userId },
+                        { receiverId: userId }
+                    ]
+                }
+            });
+            
+            console.log(`   [CALLS] ✅ Call history cleared for user ${userId}.`);
+            return sendJson(res, 200, { message: 'Call history cleared successfully' });
+        }
     }
 
     // --- 404 Not Found ---
