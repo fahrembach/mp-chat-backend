@@ -1,4 +1,6 @@
 // models/group.dart
+import 'user.dart';
+
 class Group {
   final String id;
   final String name;

@@ -1,420 +1,331 @@
+// screens/status_screen.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'dart:io';
+import '../models/status_update.dart';
+import '../models/user.dart';
+import '../services/status_service.dart';
+import '../services/auth_service.dart';
+import '../service_locator.dart';
+import 'create_status_screen.dart';
+import 'status_viewer_screen.dart';
 
 class StatusScreen extends StatefulWidget {
-  const StatusScreen({super.key});
+  const StatusScreen({Key? key}) : super(key: key);
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
 }
 
 class _StatusScreenState extends State<StatusScreen> {
-  final TextEditingController _statusController = TextEditingController();
+  final StatusService _statusService = locator<StatusService>();
+  final AuthService _authService = locator<AuthService>();
+  
+  List<StatusUpdate> _statuses = [];
+  User? _currentUser;
+  bool _isLoading = true;
 
   @override
-  void dispose() {
-    _statusController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      _currentUser = await _authService.getCurrentUser();
+      await _loadStatuses();
+    } catch (e) {
+      print('[STATUS_SCREEN] Error loading data: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadStatuses() async {
+    try {
+      final statuses = await _statusService.getStatuses();
+      setState(() {
+        _statuses = statuses;
+      });
+    } catch (e) {
+      print('[STATUS_SCREEN] Error loading statuses: $e');
+    }
+  }
+
+  Future<void> _refreshStatuses() async {
+    await _loadStatuses();
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Status'),
-        backgroundColor: const Color(0xFF1F2C34),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.black,
+        title: const Text(
+          'Status',
+          style: TextStyle(color: Colors.white),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.camera_alt),
-            onPressed: () => _showCameraOptions(),
+            icon: const Icon(Icons.camera_alt, color: Colors.white),
+            onPressed: _createStatus,
           ),
         ],
       ),
-      backgroundColor: const Color(0xFF121B22),
-      body: Column(
-        children: [
-          // Meu Status
-          _buildMyStatus(authProvider),
-          
-          // Divisor
-          const Divider(color: Color(0xFF2A3942)),
-          
-          // Status de outros usuários
-          Expanded(
-            child: _buildOthersStatus(),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateStatusDialog(),
-        backgroundColor: const Color(0xFF25D366),
-        child: const Icon(Icons.add, color: Colors.white),
+      body: RefreshIndicator(
+        onRefresh: _refreshStatuses,
+        child: _buildStatusList(),
       ),
     );
   }
 
-  Widget _buildMyStatus(AuthProvider authProvider) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: const Color(0xFF25D366),
-                child: Text(
-                  authProvider.user?.username[0].toUpperCase() ?? '?',
-                  style: const TextStyle(fontSize: 24, color: Colors.white),
-                ),
+  Widget _buildStatusList() {
+    if (_statuses.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.camera_alt_outlined,
+              size: 80,
+              color: Colors.grey,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Nenhum status encontrado',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
               ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Toque no ícone da câmera para criar um status',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Agrupar statuses por usuário
+    final Map<String, List<StatusUpdate>> groupedStatuses = {};
+    for (final status in _statuses) {
+      final userId = status.userId;
+      if (!groupedStatuses.containsKey(userId)) {
+        groupedStatuses[userId] = [];
+      }
+      groupedStatuses[userId]!.add(status);
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: groupedStatuses.length + 1, // +1 para o status próprio
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return _buildMyStatusCard();
+        }
+        
+        final userId = groupedStatuses.keys.elementAt(index - 1);
+        final userStatuses = groupedStatuses[userId]!;
+        final user = userStatuses.first.user;
+        
+        return _buildUserStatusCard(user, userStatuses);
+      },
+    );
+  }
+
+  Widget _buildMyStatusCard() {
+    final myStatuses = _statuses.where((s) => s.userId == _currentUser?.id).toList();
+    final hasUnviewedStatuses = myStatuses.any((s) => !s.isViewed);
+
+    return Card(
+      color: Colors.grey[900],
+      child: ListTile(
+        leading: Stack(
+          children: [
+            CircleAvatar(
+              radius: 25,
+              backgroundColor: Colors.grey[700],
+              child: _currentUser?.avatar != null
+                  ? ClipOval(
+                      child: Image.network(
+                        _currentUser!.avatar!,
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 30,
+                          );
+                        },
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+            ),
+            if (hasUnviewedStatuses)
               Positioned(
-                bottom: 0,
                 right: 0,
+                bottom: 0,
                 child: Container(
                   width: 20,
                   height: 20,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF25D366),
+                    color: Colors.green,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.add,
                     color: Colors.white,
-                    size: 16,
+                    size: 12,
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Meu Status',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Toque para adicionar uma atualização de status',
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOthersStatus() {
-    return ListView(
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'Atualizações recentes',
-            style: TextStyle(
-              color: Color(0xFF25D366),
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        // Status de exemplo
-        _buildStatusItem(
-          'João Silva',
-          'Acabei de chegar em casa!',
-          'há 2 horas',
-          true,
-        ),
-        _buildStatusItem(
-          'Maria Santos',
-          'Trabalhando no projeto...',
-          'há 5 horas',
-          false,
-        ),
-        _buildStatusItem(
-          'Pedro Costa',
-          'Almoçando com a família',
-          'há 1 dia',
-          false,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusItem(String name, String status, String time, bool isViewed) {
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 25,
-        backgroundColor: isViewed ? Colors.grey : const Color(0xFF25D366),
-        child: Text(
-          name[0].toUpperCase(),
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
-      title: Text(
-        name,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      subtitle: Text(
-        time,
-        style: const TextStyle(color: Colors.white60),
-      ),
-      onTap: () => _showStatusViewer(name, status, time),
-    );
-  }
-
-  void _showCreateStatusDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1F2C34),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Criar Status',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatusOption(
-                  icon: Icons.text_fields,
-                  label: 'Texto',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showTextStatusDialog();
-                  },
-                ),
-                _buildStatusOption(
-                  icon: Icons.photo,
-                  label: 'Foto',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImage();
-                  },
-                ),
-                _buildStatusOption(
-                  icon: Icons.videocam,
-                  label: 'Vídeo',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickVideo();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatusOption({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A3942),
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white70,
-              size: 30,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showTextStatusDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F2C34),
         title: const Text(
-          'Status de Texto',
+          'Meu Status',
           style: TextStyle(color: Colors.white),
         ),
-        content: TextField(
-          controller: _statusController,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'O que você está pensando?',
-            hintStyle: TextStyle(color: Colors.white54),
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
+        subtitle: Text(
+          myStatuses.isEmpty 
+              ? 'Toque para adicionar uma atualização de status'
+              : '${myStatuses.length} atualização${myStatuses.length > 1 ? 'ões' : ''}',
+          style: const TextStyle(color: Colors.grey),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: Colors.white70),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Status criado com sucesso!'),
-                  backgroundColor: Color(0xFF25D366),
-                ),
-              );
-            },
-            child: const Text(
-              'Publicar',
-              style: TextStyle(color: Color(0xFF25D366)),
-            ),
-          ),
-        ],
+        onTap: _createStatus,
       ),
     );
   }
 
-  void _showCameraOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1F2C34),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  Widget _buildUserStatusCard(User? user, List<StatusUpdate> statuses) {
+    final hasUnviewedStatuses = statuses.any((s) => !s.isViewed);
+    final latestStatus = statuses.first;
+
+    return Card(
+      color: Colors.grey[900],
+      child: ListTile(
+        leading: Stack(
           children: [
-            const Text(
-              'Câmera',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            CircleAvatar(
+              radius: 25,
+              backgroundColor: hasUnviewedStatuses ? Colors.green : Colors.grey[700],
+              child: user?.avatar != null
+                  ? ClipOval(
+                      child: Image.network(
+                        user!.avatar!,
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 30,
+                          );
+                        },
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+            ),
+            if (hasUnviewedStatuses)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: const BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatusOption(
-                  icon: Icons.camera_alt,
-                  label: 'Foto',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImage();
-                  },
-                ),
-                _buildStatusOption(
-                  icon: Icons.videocam,
-                  label: 'Vídeo',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickVideo();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
           ],
         ),
-      ),
-    );
-  }
-
-  void _pickImage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Selecionar imagem será implementado em breve'),
-        backgroundColor: Color(0xFF25D366),
-      ),
-    );
-  }
-
-  void _pickVideo() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Selecionar vídeo será implementado em breve'),
-        backgroundColor: Color(0xFF25D366),
-      ),
-    );
-  }
-
-  void _showStatusViewer(String name, String status, String time) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F2C34),
         title: Text(
-          name,
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              status,
-              style: const TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              time,
-              style: const TextStyle(color: Colors.white60),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Fechar',
-              style: TextStyle(color: Color(0xFF25D366)),
-            ),
+          user?.name ?? 'Usuário',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: hasUnviewedStatuses ? FontWeight.bold : FontWeight.normal,
           ),
-        ],
+        ),
+        subtitle: Text(
+          _formatStatusTime(latestStatus.createdAt),
+          style: const TextStyle(color: Colors.grey),
+        ),
+        onTap: () => _viewUserStatuses(user, statuses),
+      ),
+    );
+  }
+
+  String _formatStatusTime(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+
+    if (difference.inMinutes < 1) {
+      return 'Agora';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d';
+    } else {
+      return '${time.day}/${time.month}/${time.year}';
+    }
+  }
+
+  void _createStatus() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CreateStatusScreen(),
+      ),
+    ).then((_) {
+      _refreshStatuses();
+    });
+  }
+
+  void _viewUserStatuses(User? user, List<StatusUpdate> statuses) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StatusViewerScreen(
+          user: user,
+          statuses: statuses,
+          onStatusViewed: (statusId) {
+            _statusService.viewStatus(statusId);
+            _refreshStatuses();
+          },
+        ),
       ),
     );
   }

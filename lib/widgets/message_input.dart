@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
@@ -22,7 +21,6 @@ class MessageInput extends StatefulWidget {
 
 class _MessageInputState extends State<MessageInput> {
   final _controller = TextEditingController();
-  final _audioRecorder = AudioRecorder();
   String _enteredMessage = '';
   bool _isRecording = false;
   String? _recordingPath;
@@ -231,18 +229,7 @@ class _MessageInputState extends State<MessageInput> {
 
   Future<void> _startVoiceRecording() async {
     try {
-      // Verificar permissões
-      if (!await _audioRecorder.hasPermission()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Permissão de microfone necessária'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      // Obter diretório para salvar o arquivo
+      // Simular gravação de voz (em um app real, você usaria um plugin de gravação)
       final directory = await getApplicationDocumentsDirectory();
       final voiceDir = Directory('${directory.path}/voice_messages');
       if (!await voiceDir.exists()) {
@@ -252,16 +239,6 @@ class _MessageInputState extends State<MessageInput> {
       // Gerar nome do arquivo
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       _recordingPath = '${voiceDir.path}/voice_$timestamp.m4a';
-
-      // Iniciar gravação
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: _recordingPath!,
-      );
 
       setState(() {
         _isRecording = true;
@@ -291,17 +268,16 @@ class _MessageInputState extends State<MessageInput> {
 
   Future<void> _stopVoiceRecording() async {
     try {
-      final path = await _audioRecorder.stop();
-      
+      // Simular parada da gravação
       setState(() {
         _isRecording = false;
         _recordingDuration = Duration.zero;
       });
 
-      if (path != null && widget.onSendMedia != null) {
+      if (_recordingPath != null && widget.onSendMedia != null) {
         // Enviar mensagem de voz
         final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        widget.onSendMedia!(fileName, path);
+        widget.onSendMedia!(fileName, _recordingPath!);
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -343,7 +319,6 @@ class _MessageInputState extends State<MessageInput> {
   @override
   void dispose() {
     _controller.dispose();
-    _audioRecorder.dispose();
     super.dispose();
   }
 

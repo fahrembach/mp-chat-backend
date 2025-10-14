@@ -87,4 +87,28 @@ class AuthService {
     }
     return false;
   }
+
+  Future<String?> getToken() async {
+    if (_token != null) return _token;
+    
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('userData')) {
+      final extractedUserData = json.decode(prefs.getString('userData')!) as Map<String, dynamic>;
+      _token = extractedUserData['token'];
+      return _token;
+    }
+    return null;
+  }
+
+  Future<User?> getCurrentUser() async {
+    if (_user != null) return _user;
+    
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('userData')) {
+      final extractedUserData = json.decode(prefs.getString('userData')!) as Map<String, dynamic>;
+      _user = User.fromJson(extractedUserData['user']);
+      return _user;
+    }
+    return null;
+  }
 }

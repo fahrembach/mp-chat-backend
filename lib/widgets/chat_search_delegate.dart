@@ -30,6 +30,7 @@ class ChatSearchDelegate extends SearchDelegate<Message> {
           senderId: '',
           receiverId: '',
           createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
           isRead: false,
         ));
       },

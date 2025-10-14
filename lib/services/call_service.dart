@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
 import 'socket_service.dart';
+import '../models/call.dart';
+import 'call_history_service.dart';
 
 class CallService {
   static final CallService _instance = CallService._internal();
@@ -21,11 +23,15 @@ class CallService {
   
   // Socket service para sinalização
   SocketService? _socketService;
+  CallHistoryService? _callHistoryService;
   
   bool _isInCall = false;
   bool _isCallActive = false;
   String? _currentCallId;
   String? _currentPeerId;
+  String? _currentUserId;
+  String? _currentReceiverId;
+  CallType _currentCallType = CallType.audio;
   
   // Callbacks
   Function(MediaStream)? onRemoteStream;
@@ -43,6 +49,16 @@ class CallService {
   Future<void> initialize() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
+  }
+
+  // Configurar serviço de histórico
+  void setCallHistoryService(CallHistoryService callHistoryService) {
+    _callHistoryService = callHistoryService;
+  }
+
+  // Definir ID do usuário atual
+  void setCurrentUserId(String userId) {
+    _currentUserId = userId;
   }
 
   // Configurar listeners do SocketService para receber chamadas
@@ -130,18 +146,30 @@ class CallService {
     _remoteStream?.dispose();
   }
 
-  Future<void> startCall(String peerId, String callId, {SocketService? socketService}) async {
+  Future<void> startCall(String peerId, String callId, {SocketService? socketService, bool isVideo = false}) async {
     try {
       _currentPeerId = peerId;
       _currentCallId = callId;
+      _currentReceiverId = peerId;
+      _currentCallType = isVideo ? CallType.video : CallType.audio;
       _isInCall = true;
       _socketService = socketService;
+      
+      // Registrar chamada no histórico
+      if (_callHistoryService != null && _currentUserId != null) {
+        await _callHistoryService!.recordCall(
+          callerId: _currentUserId!,
+          receiverId: peerId,
+          type: _currentCallType,
+          status: CallStatus.outgoing,
+        );
+      }
       
       // Configurar WebRTC
       await _setupPeerConnection();
       
       // Obter stream de mídia local
-      _localStream = await _getUserMedia();
+      _localStream = await _getUserMedia(isVideo: isVideo);
       _localRenderer.srcObject = _localStream;
       
       // Adicionar stream local ao peer connection
@@ -170,18 +198,30 @@ class CallService {
     }
   }
 
-  Future<void> answerCall(String peerId, String callId, Map<String, dynamic> offerData, {SocketService? socketService}) async {
+  Future<void> answerCall(String peerId, String callId, Map<String, dynamic> offerData, {SocketService? socketService, bool isVideo = false}) async {
     try {
       _currentPeerId = peerId;
       _currentCallId = callId;
+      _currentReceiverId = peerId;
+      _currentCallType = isVideo ? CallType.video : CallType.audio;
       _isInCall = true;
       _socketService = socketService;
+      
+      // Registrar chamada no histórico
+      if (_callHistoryService != null && _currentUserId != null) {
+        await _callHistoryService!.recordCall(
+          callerId: peerId,
+          receiverId: _currentUserId!,
+          type: _currentCallType,
+          status: CallStatus.incoming,
+        );
+      }
       
       // Configurar WebRTC
       await _setupPeerConnection();
       
       // Obter stream de mídia local
-      _localStream = await _getUserMedia();
+      _localStream = await _getUserMedia(isVideo: isVideo);
       _localRenderer.srcObject = _localStream;
       
       // Adicionar stream local ao peer connection
@@ -222,6 +262,11 @@ class CallService {
       _isInCall = false;
       _isCallActive = false;
       
+      // Atualizar status da chamada no histórico
+      if (_callHistoryService != null && _currentCallId != null) {
+        await _callHistoryService!.updateCallStatus(_currentCallId!, CallStatus.ended);
+      }
+      
       // Enviar sinal de fim via socket
       if (_socketService != null && _currentPeerId != null && _currentCallId != null) {
         _socketService!.sendCallEnd(_currentPeerId!, _currentCallId!);
@@ -236,6 +281,7 @@ class CallService {
       
       _currentCallId = null;
       _currentPeerId = null;
+      _currentReceiverId = null;
       
       // Limpar descrições
       _localOffer = null;
@@ -291,7 +337,7 @@ class CallService {
     };
   }
 
-  Future<MediaStream> _getUserMedia() async {
+  Future<MediaStream> _getUserMedia({bool isVideo = false}) async {
     final Map<String, dynamic> mediaConstraints = {
       'audio': {
         'echoCancellation': true,
@@ -300,7 +346,12 @@ class CallService {
         'sampleRate': 48000, // Qualidade alta
         'channelCount': 2,   // Estéreo
       },
-      'video': false, // Apenas áudio para chamadas
+      'video': isVideo ? {
+        'width': {'min': 640, 'ideal': 1280, 'max': 1920},
+        'height': {'min': 480, 'ideal': 720, 'max': 1080},
+        'frameRate': {'min': 15, 'ideal': 30, 'max': 60},
+        'facingMode': 'user', // Câmera frontal
+      } : false,
     };
 
     return await navigator.mediaDevices.getUserMedia(mediaConstraints);

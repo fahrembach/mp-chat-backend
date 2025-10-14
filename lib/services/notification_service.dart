@@ -1,9 +1,9 @@
 // services/notification_service.dart
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../models/notification.dart';
 
 class NotificationService {
@@ -12,7 +12,7 @@ class NotificationService {
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  // final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   
   bool _isInitialized = false;
   String? _fcmToken;
@@ -32,7 +32,7 @@ class NotificationService {
       await _initializeLocalNotifications();
       
       // Configurar Firebase Messaging
-      await _initializeFirebaseMessaging();
+      // await _initializeFirebaseMessaging();
       
       // Solicitar permissões
       await _requestPermissions();
@@ -79,6 +79,8 @@ class NotificationService {
   }
 
   Future<void> _initializeFirebaseMessaging() async {
+    // TODO: Implementar Firebase quando necessário
+    /*
     // Obter token FCM
     _fcmToken = await _firebaseMessaging.getToken();
     print('[NOTIFICATION] FCM Token: $_fcmToken');
@@ -92,6 +94,7 @@ class NotificationService {
     if (initialMessage != null) {
       _handleBackgroundMessage(initialMessage);
     }
+    */
   }
 
   Future<void> _requestPermissions() async {
@@ -99,6 +102,7 @@ class NotificationService {
     await Permission.notification.request();
     
     // Permissões Firebase
+    /*
     final settings = await _firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
@@ -109,6 +113,7 @@ class NotificationService {
     if (settings.authorizationStatus == AuthorizationStatus.denied) {
       print('[NOTIFICATION] User denied notification permissions');
     }
+    */
   }
 
   void _onNotificationTapped(NotificationResponse response) {
@@ -124,7 +129,9 @@ class NotificationService {
     }
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
+  void _handleForegroundMessage(dynamic message) {
+    // TODO: Implementar Firebase quando necessário
+    /*
     print('[NOTIFICATION] Received foreground message: ${message.messageId}');
     
     // Mostrar notificação local
@@ -139,9 +146,12 @@ class NotificationService {
         print('[NOTIFICATION] Error parsing notification data: $e');
       }
     }
+    */
   }
 
-  void _handleBackgroundMessage(RemoteMessage message) {
+  void _handleBackgroundMessage(dynamic message) {
+    // TODO: Implementar Firebase quando necessário
+    /*
     print('[NOTIFICATION] Received background message: ${message.messageId}');
     
     // Processar dados da mensagem
@@ -153,9 +163,12 @@ class NotificationService {
         print('[NOTIFICATION] Error parsing notification data: $e');
       }
     }
+    */
   }
 
-  Future<void> _showLocalNotification(RemoteMessage message) async {
+  Future<void> _showLocalNotification(dynamic message) async {
+    // TODO: Implementar Firebase quando necessário
+    /*
     const androidDetails = AndroidNotificationDetails(
       'mp_chat_channel',
       'M-P Chat Notifications',
@@ -183,6 +196,7 @@ class NotificationService {
       details,
       payload: json.encode(message.data),
     );
+    */
   }
 
   Future<void> showLocalNotification({
@@ -250,7 +264,7 @@ class NotificationService {
       id ?? DateTime.now().millisecondsSinceEpoch,
       title,
       body,
-      scheduledDate,
+      tz.TZDateTime.from(scheduledDate, tz.getLocation('America/Sao_Paulo')),
       details,
       payload: payload,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
@@ -270,21 +284,27 @@ class NotificationService {
   }
 
   Future<void> subscribeToTopic(String topic) async {
+    // TODO: Implementar Firebase quando necessário
+    /*
     try {
       await _firebaseMessaging.subscribeToTopic(topic);
       print('[NOTIFICATION] Subscribed to topic: $topic');
     } catch (e) {
       print('[NOTIFICATION] Error subscribing to topic: $e');
     }
+    */
   }
 
   Future<void> unsubscribeFromTopic(String topic) async {
+    // TODO: Implementar Firebase quando necessário
+    /*
     try {
       await _firebaseMessaging.unsubscribeFromTopic(topic);
       print('[NOTIFICATION] Unsubscribed from topic: $topic');
     } catch (e) {
       print('[NOTIFICATION] Error unsubscribing from topic: $e');
     }
+    */
   }
 
   Future<void> sendNotificationToken(String token) async {

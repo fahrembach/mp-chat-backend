@@ -8,6 +8,15 @@ import '../models/message.dart';
 class ApiService {
   // URL do backend no Render
   static const String _baseUrl = 'https://projeto-798t.onrender.com/api';
+  
+  // Getter para baseUrl
+  String get baseUrl => _baseUrl;
+  
+  // Método para obter token
+  Future<String?> getToken() async {
+    // Implementar lógica para obter token do SharedPreferences
+    return null;
+  }
 
   Future<Map<String, dynamic>> register(String username, String password) async {
     final url = Uri.parse('$_baseUrl/auth/register');

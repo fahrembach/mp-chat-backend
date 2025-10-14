@@ -177,6 +177,7 @@ class ChatProvider with ChangeNotifier {
       senderId: _authProvider.user!.id,
       receiverId: receiverId,
       createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
       fileName: fileName,
       fileSize: await File(filePath).length(),
       mediaUrl: filePath, // Armazenar o caminho local para preview
@@ -214,6 +215,7 @@ class ChatProvider with ChangeNotifier {
       senderId: _authProvider.user!.id,
       receiverId: receiverId,
       createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
     if (!_messages.containsKey(receiverId)) {
       _messages[receiverId] = [];

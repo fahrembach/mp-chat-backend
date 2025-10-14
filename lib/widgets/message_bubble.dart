@@ -103,53 +103,56 @@ class _MessageBubbleState extends State<MessageBubble> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.message.mediaUrl != null && widget.message.mediaUrl!.isNotEmpty)
-          Container(
-            constraints: const BoxConstraints(
-              maxHeight: 200,
-              maxWidth: 250,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: widget.message.mediaUrl!.startsWith('http')
-                  ? Image.network(
-                      widget.message.mediaUrl!,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          height: 200,
-                          width: 250,
-                          color: Colors.grey[800],
-                          child: const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 200,
-                          width: 250,
-                          color: Colors.grey[800],
-                          child: const Center(
-                            child: Icon(Icons.error, color: Colors.white),
-                          ),
-                        );
-                      },
-                    )
-                  : Image.file(
-                      File(widget.message.mediaUrl!),
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 200,
-                          width: 250,
-                          color: Colors.grey[800],
-                          child: const Center(
-                            child: Icon(Icons.error, color: Colors.white),
-                          ),
-                        );
-                      },
-                    ),
+          GestureDetector(
+            onTap: () => _showImagePreview(context, widget.message.mediaUrl!),
+            child: Container(
+              constraints: const BoxConstraints(
+                maxHeight: 200,
+                maxWidth: 250,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: widget.message.mediaUrl!.startsWith('http')
+                    ? Image.network(
+                        widget.message.mediaUrl!,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            height: 200,
+                            width: 250,
+                            color: Colors.grey[800],
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            width: 250,
+                            color: Colors.grey[800],
+                            child: const Center(
+                              child: Icon(Icons.error, color: Colors.white),
+                            ),
+                          );
+                        },
+                      )
+                    : Image.file(
+                        File(widget.message.mediaUrl!),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            width: 250,
+                            color: Colors.grey[800],
+                            child: const Center(
+                              child: Icon(Icons.error, color: Colors.white),
+                            ),
+                          );
+                        },
+                      ),
+              ),
             ),
           ),
         if (widget.message.fileName != null)
@@ -407,5 +410,51 @@ class _MessageBubbleState extends State<MessageBubble> {
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  void _showImagePreview(BuildContext context, String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            title: const Text('Preview', style: TextStyle(color: Colors.white)),
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: Center(
+            child: imageUrl.startsWith('http')
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Text(
+                          'Erro ao carregar imagem',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      );
+                    },
+                  )
+                : Image.file(
+                    File(imageUrl),
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Text(
+                          'Erro ao carregar imagem',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ),
+    );
   }
 }

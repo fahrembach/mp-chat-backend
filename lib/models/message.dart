@@ -36,6 +36,10 @@ class Message {
   final MessageStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? mediaUrl;
+  final String? fileName;
+  final int? fileSize;
+  final bool isRead;
   final User? sender;
   final User? receiver;
   final Group? group;
@@ -60,6 +64,10 @@ class Message {
     this.status = MessageStatus.sent,
     required this.createdAt,
     required this.updatedAt,
+    this.mediaUrl,
+    this.fileName,
+    this.fileSize,
+    this.isRead = false,
     this.sender,
     this.receiver,
     this.group,
@@ -86,6 +94,10 @@ class Message {
       status: _stringToMessageStatus(json['status'] ?? 'sent'),
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
+      mediaUrl: json['mediaUrl'],
+      fileName: json['fileName'],
+      fileSize: json['fileSize'],
+      isRead: json['isRead'] ?? false,
       sender: json['sender'] != null ? User.fromJson(json['sender']) : null,
       receiver: json['receiver'] != null ? User.fromJson(json['receiver']) : null,
       group: json['group'] != null ? Group.fromJson(json['group']) : null,
@@ -115,6 +127,10 @@ class Message {
       'status': _messageStatusToString(status),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'mediaUrl': mediaUrl,
+      'fileName': fileName,
+      'fileSize': fileSize,
+      'isRead': isRead,
       'sender': sender?.toJson(),
       'receiver': receiver?.toJson(),
       'group': group?.toJson(),
@@ -185,6 +201,10 @@ class Message {
     DateTime? expiresAt,
     String? metadata,
     MessageStatus? status,
+    String? mediaUrl,
+    String? fileName,
+    int? fileSize,
+    bool? isRead,
     List<MessageReaction>? reactions,
   }) {
     return Message(
@@ -204,6 +224,10 @@ class Message {
       status: status ?? this.status,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
+      isRead: isRead ?? this.isRead,
       sender: sender,
       receiver: receiver,
       group: group,

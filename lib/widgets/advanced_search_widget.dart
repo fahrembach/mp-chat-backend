@@ -1,23 +1,22 @@
-// widgets/advanced_search_widget.dart
 import 'package:flutter/material.dart';
-import '../services/search_service.dart';
+import 'package:get_it/get_it.dart';
 import '../models/user.dart';
 import '../models/message.dart';
 import '../models/group.dart';
 import '../models/community.dart';
+import '../services/search_service.dart';
+import '../services/auth_service.dart';
 
 class AdvancedSearchWidget extends StatefulWidget {
-  final String token;
-  final Function(Message)? onMessageSelected;
   final Function(User)? onUserSelected;
+  final Function(Message)? onMessageSelected;
   final Function(Group)? onGroupSelected;
   final Function(Community)? onCommunitySelected;
 
   const AdvancedSearchWidget({
     Key? key,
-    required this.token,
-    this.onMessageSelected,
     this.onUserSelected,
+    this.onMessageSelected,
     this.onGroupSelected,
     this.onCommunitySelected,
   }) : super(key: key);
@@ -28,22 +27,26 @@ class AdvancedSearchWidget extends StatefulWidget {
 
 class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
     with TickerProviderStateMixin {
-  final SearchService _searchService = SearchService();
+  final SearchService _searchService = GetIt.instance<SearchService>();
+  final AuthService _authService = GetIt.instance<AuthService>();
   final TextEditingController _searchController = TextEditingController();
+  
   late TabController _tabController;
-
-  String _currentQuery = '';
+  
   List<User> _users = [];
   List<Message> _messages = [];
   List<Group> _groups = [];
   List<Community> _communities = [];
+  
   bool _isLoading = false;
-  String? _error;
+  String _currentQuery = '';
+  String? _currentToken;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _getAuthToken();
   }
 
   @override
@@ -53,26 +56,24 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
     super.dispose();
   }
 
-  Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() {
-        _users.clear();
-        _messages.clear();
-        _groups.clear();
-        _communities.clear();
-        _error = null;
-      });
-      return;
+  Future<void> _getAuthToken() async {
+    try {
+      _currentToken = await _authService.getToken();
+    } catch (e) {
+      debugPrint('Erro ao obter token: $e');
     }
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (query.isEmpty || _currentToken == null) return;
 
     setState(() {
       _isLoading = true;
-      _error = null;
       _currentQuery = query;
     });
 
     try {
-      final results = await _searchService.globalSearch(query, widget.token);
+      final results = await _searchService.globalSearch(query, _currentToken!);
       
       setState(() {
         _users = results['users'] as List<User>;
@@ -83,142 +84,174 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _isLoading = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro na busca: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _searchUsers(String query) async {
+    if (query.isEmpty || _currentToken == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final users = await _searchService.searchUsers(query, _currentToken!);
+      setState(() {
+        _users = users;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
         _isLoading = false;
       });
     }
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Buscar mensagens, usuários, grupos...',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                    _performSearch('');
-                  },
-                )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          filled: true,
-          fillColor: Theme.of(context).cardColor,
+  Future<void> _searchMessages(String query) async {
+    if (query.isEmpty || _currentToken == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final messages = await _searchService.searchMessages(query, _currentToken!);
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _searchGroups(String query) async {
+    if (query.isEmpty || _currentToken == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final groups = await _searchService.searchGroups(query, _currentToken!);
+      setState(() {
+        _groups = groups;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _searchCommunities(String query) async {
+    if (query.isEmpty || _currentToken == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final communities = await _searchService.searchCommunities(query, _currentToken!);
+      setState(() {
+        _communities = communities;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Busca Avançada'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Usuários'),
+            Tab(text: 'Mensagens'),
+            Tab(text: 'Grupos'),
+            Tab(text: 'Comunidades'),
+          ],
         ),
-        onChanged: (value) {
-          if (value.length >= 2) {
-            _performSearch(value);
-          } else if (value.isEmpty) {
-            _performSearch('');
-          }
-        },
       ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return TabBar(
-      controller: _tabController,
-      tabs: [
-        Tab(
-          text: 'Mensagens',
-          icon: Icon(Icons.message, size: 20),
-        ),
-        Tab(
-          text: 'Usuários',
-          icon: Icon(Icons.people, size: 20),
-        ),
-        Tab(
-          text: 'Grupos',
-          icon: Icon(Icons.group, size: 20),
-        ),
-        Tab(
-          text: 'Comunidades',
-          icon: Icon(Icons.public, size: 20),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMessagesTab() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_error!, textAlign: TextAlign.center),
-          ],
-        ),
-      );
-    }
-
-    if (_messages.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.message, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              _currentQuery.isEmpty
-                  ? 'Digite algo para buscar mensagens'
-                  : 'Nenhuma mensagem encontrada',
-              textAlign: TextAlign.center,
+      body: Column(
+        children: [
+          // Barra de busca
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Digite para buscar...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _users.clear();
+                            _messages.clear();
+                            _groups.clear();
+                            _communities.clear();
+                            _currentQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) {
+                if (value.length >= 2) {
+                  _performSearch(value);
+                } else if (value.isEmpty) {
+                  setState(() {
+                    _users.clear();
+                    _messages.clear();
+                    _groups.clear();
+                    _communities.clear();
+                    _currentQuery = '';
+                  });
+                }
+              },
             ),
-          ],
-        ),
-      );
-    }
+          ),
 
-    return ListView.builder(
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final message = _messages[index];
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundImage: message.sender?.avatar != null
-                ? NetworkImage(message.sender!.avatar!)
-                : null,
-            child: message.sender?.avatar == null
-                ? Text(message.sender?.displayName.substring(0, 1).toUpperCase() ?? '?')
-                : null,
+          // Resultados da busca
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildUsersTab(),
+                _buildMessagesTab(),
+                _buildGroupsTab(),
+                _buildCommunitiesTab(),
+              ],
+            ),
           ),
-          title: Text(message.sender?.displayName ?? 'Usuário desconhecido'),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                message.content,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _formatDate(message.createdAt),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-          trailing: Icon(
-            _getMessageTypeIcon(message.type),
-            size: 20,
-          ),
-          onTap: () => widget.onMessageSelected?.call(message),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -227,34 +260,9 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_error!, textAlign: TextAlign.center),
-          ],
-        ),
-      );
-    }
-
-    if (_users.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.people, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              _currentQuery.isEmpty
-                  ? 'Digite algo para buscar usuários'
-                  : 'Nenhum usuário encontrado',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    if (_users.isEmpty && _currentQuery.isNotEmpty) {
+      return const Center(
+        child: Text('Nenhum usuário encontrado'),
       );
     }
 
@@ -264,27 +272,13 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
         final user = _users[index];
         return ListTile(
           leading: CircleAvatar(
-            backgroundImage: user.avatar != null
-                ? NetworkImage(user.avatar!)
-                : null,
-            child: user.avatar == null
-                ? Text(user.displayName.substring(0, 1).toUpperCase())
-                : null,
+            backgroundColor: Colors.grey[300],
+            child: user.avatar != null
+                ? ClipOval(child: Image.network(user.avatar!, fit: BoxFit.cover))
+                : const Icon(Icons.person),
           ),
           title: Text(user.displayName),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('@${user.username}'),
-              if (user.bio != null) Text(user.bio!),
-              Text(
-                user.isOnline ? 'Online' : user.lastSeenText,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: user.isOnline ? Colors.green : Colors.grey,
-                ),
-              ),
-            ],
-          ),
+          subtitle: Text(user.bio ?? ''),
           trailing: user.isOnline
               ? Container(
                   width: 12,
@@ -295,7 +289,47 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
                   ),
                 )
               : null,
-          onTap: () => widget.onUserSelected?.call(user),
+          onTap: () {
+            widget.onUserSelected?.call(user);
+            Navigator.of(context).pop();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMessagesTab() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_messages.isEmpty && _currentQuery.isNotEmpty) {
+      return const Center(
+        child: Text('Nenhuma mensagem encontrada'),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        final message = _messages[index];
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Colors.grey[300],
+            child: const Icon(Icons.message),
+          ),
+          title: Text(message.content),
+          subtitle: Text(
+            '${message.sender?.name ?? 'Usuário'} • ${_formatDate(message.createdAt)}',
+          ),
+          trailing: Icon(
+            _getMessageTypeIcon(message.type),
+            size: 20,
+          ),
+          onTap: () {
+            widget.onMessageSelected?.call(message);
+            Navigator.of(context).pop();
+          },
         );
       },
     );
@@ -306,34 +340,9 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_error!, textAlign: TextAlign.center),
-          ],
-        ),
-      );
-    }
-
-    if (_groups.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.group, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              _currentQuery.isEmpty
-                  ? 'Digite algo para buscar grupos'
-                  : 'Nenhum grupo encontrado',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    if (_groups.isEmpty && _currentQuery.isNotEmpty) {
+      return const Center(
+        child: Text('Nenhum grupo encontrado'),
       );
     }
 
@@ -343,28 +352,20 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
         final group = _groups[index];
         return ListTile(
           leading: CircleAvatar(
-            backgroundImage: group.avatar != null
-                ? NetworkImage(group.avatar!)
-                : null,
-            child: group.avatar == null
-                ? Text(group.name.substring(0, 1).toUpperCase())
-                : null,
+            backgroundColor: Colors.grey[300],
+            child: group.avatar != null
+                ? ClipOval(child: Image.network(group.avatar!, fit: BoxFit.cover))
+                : const Icon(Icons.group),
           ),
           title: Text(group.name),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (group.description != null) Text(group.description!),
-              Text(
-                '${group.members.length} membros',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+          subtitle: Text(group.description ?? ''),
           trailing: group.isPrivate
-              ? Icon(Icons.lock, size: 20, color: Colors.grey)
-              : Icon(Icons.public, size: 20, color: Colors.green),
-          onTap: () => widget.onGroupSelected?.call(group),
+              ? const Icon(Icons.lock, size: 20)
+              : const Icon(Icons.public, size: 20),
+          onTap: () {
+            widget.onGroupSelected?.call(group);
+            Navigator.of(context).pop();
+          },
         );
       },
     );
@@ -375,34 +376,9 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_error!, textAlign: TextAlign.center),
-          ],
-        ),
-      );
-    }
-
-    if (_communities.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.public, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              _currentQuery.isEmpty
-                  ? 'Digite algo para buscar comunidades'
-                  : 'Nenhuma comunidade encontrada',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    if (_communities.isEmpty && _currentQuery.isNotEmpty) {
+      return const Center(
+        child: Text('Nenhuma comunidade encontrada'),
       );
     }
 
@@ -412,53 +388,53 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
         final community = _communities[index];
         return ListTile(
           leading: CircleAvatar(
-            backgroundImage: community.avatar != null
-                ? NetworkImage(community.avatar!)
-                : null,
-            child: community.avatar == null
-                ? Text(community.name.substring(0, 1).toUpperCase())
-                : null,
+            backgroundColor: Colors.grey[300],
+            child: community.avatar != null
+                ? ClipOval(child: Image.network(community.avatar!, fit: BoxFit.cover))
+                : const Icon(Icons.people),
           ),
           title: Text(community.name),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (community.description != null) Text(community.description!),
-              Text(
-                '${community.memberCount} membros',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+          subtitle: Text(community.description ?? ''),
           trailing: community.isPrivate
-              ? Icon(Icons.lock, size: 20, color: Colors.grey)
-              : Icon(Icons.public, size: 20, color: Colors.green),
-          onTap: () => widget.onCommunitySelected?.call(community),
+              ? const Icon(Icons.lock, size: 20)
+              : const Icon(Icons.public, size: 20),
+          onTap: () {
+            widget.onCommunitySelected?.call(community);
+            Navigator.of(context).pop();
+          },
         );
       },
     );
   }
 
-  IconData _getMessageTypeIcon(dynamic type) {
-    switch (type.toString()) {
-      case 'image':
+  IconData _getMessageTypeIcon(MessageType type) {
+    switch (type) {
+      case MessageType.text:
+        return Icons.text_fields;
+      case MessageType.image:
         return Icons.image;
-      case 'video':
+      case MessageType.video:
         return Icons.videocam;
-      case 'audio':
+      case MessageType.audio:
         return Icons.audiotrack;
-      case 'file':
+      case MessageType.voice:
+        return Icons.mic;
+      case MessageType.file:
         return Icons.attach_file;
-      case 'location':
+      case MessageType.location:
         return Icons.location_on;
-      case 'contact':
+      case MessageType.contact:
         return Icons.contact_phone;
-      case 'sticker':
+      case MessageType.sticker:
         return Icons.emoji_emotions;
-      case 'gif':
+      case MessageType.gif:
         return Icons.gif;
-      default:
-        return Icons.message;
+      case MessageType.document:
+        return Icons.description;
+      case MessageType.poll:
+        return Icons.poll;
+      case MessageType.system:
+        return Icons.info;
     }
   }
 
@@ -467,34 +443,13 @@ class _AdvancedSearchWidgetState extends State<AdvancedSearchWidget>
     final difference = now.difference(date);
 
     if (difference.inDays > 0) {
-      return '${difference.inDays} dias atrás';
+      return '${difference.inDays}d atrás';
     } else if (difference.inHours > 0) {
-      return '${difference.inHours} horas atrás';
+      return '${difference.inHours}h atrás';
     } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minutos atrás';
+      return '${difference.inMinutes}m atrás';
     } else {
-      return 'Agora mesmo';
+      return 'Agora';
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildSearchBar(),
-        _buildTabBar(),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildMessagesTab(),
-              _buildUsersTab(),
-              _buildGroupsTab(),
-              _buildCommunitiesTab(),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 }
