@@ -78,6 +78,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     switch (widget.message.type) {
       case MessageType.image:
         return _buildImageMessage(context);
+      case MessageType.video:
+        return _buildVideoMessage(context);
       case MessageType.file:
         return _buildFileMessage(context);
       case MessageType.audio:
@@ -152,6 +154,68 @@ class _MessageBubbleState extends State<MessageBubble> {
                           );
                         },
                       ),
+              ),
+            ),
+          ),
+        if (widget.message.fileName != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              widget.message.fileName!,
+              style: TextStyle(
+                color: widget.isMe ? Colors.white70 : Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildVideoMessage(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.message.mediaUrl != null && widget.message.mediaUrl!.isNotEmpty)
+          GestureDetector(
+            onTap: () => _showVideoPreview(context, widget.message.mediaUrl!),
+            child: Container(
+              constraints: const BoxConstraints(
+                maxHeight: 200,
+                maxWidth: 250,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 200,
+                      width: 250,
+                      color: Colors.grey[800],
+                      child: const Center(
+                        child: Icon(Icons.play_circle_filled, color: Colors.white, size: 50),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Vídeo',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -451,6 +515,40 @@ class _MessageBubbleState extends State<MessageBubble> {
                         ),
                       );
                     },
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showVideoPreview(BuildContext context, String videoUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            title: const Text('Vídeo', style: TextStyle(color: Colors.white)),
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: Center(
+            child: videoUrl.startsWith('http')
+                ? const Center(
+                    child: Text(
+                      'Reprodução de vídeo online não implementada',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  )
+                : const Center(
+                    child: Text(
+                      'Reprodução de vídeo local não implementada',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
           ),
         ),

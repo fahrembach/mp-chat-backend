@@ -41,7 +41,8 @@ class _MessageInputState extends State<MessageInput> {
   Future<void> _pickImage() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
         allowMultiple: false,
       );
       
@@ -53,6 +54,25 @@ class _MessageInputState extends State<MessageInput> {
       }
     } catch (e) {
       print('Error picking image: $e');
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp4', 'mov', 'avi', 'mkv', 'webm'],
+        allowMultiple: false,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (widget.onSendMedia != null) {
+          widget.onSendMedia!(file.name, file.path ?? '');
+        }
+      }
+    } catch (e) {
+      print('Error picking video: $e');
     }
   }
 
@@ -173,6 +193,14 @@ class _MessageInputState extends State<MessageInput> {
                   onTap: () {
                     Navigator.pop(context);
                     _pickFile();
+                  },
+                ),
+                _buildMediaOption(
+                  icon: Icons.videocam,
+                  label: 'Vídeo',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickVideo();
                   },
                 ),
                 _buildMediaOption(

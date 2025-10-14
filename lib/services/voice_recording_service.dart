@@ -6,14 +6,14 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-// import 'package:record/record.dart'; // Removed due to CMake issues
+import 'package:flutter_sound/flutter_sound.dart';
 
 class VoiceRecordingService {
   static final VoiceRecordingService _instance = VoiceRecordingService._internal();
   factory VoiceRecordingService() => _instance;
   VoiceRecordingService._internal();
 
-  // final AudioRecorder _audioRecorder = AudioRecorder(); // Removed due to CMake issues
+  FlutterSoundRecorder? _recorder;
   final AudioPlayer _audioPlayer = AudioPlayer();
   
   String? _recordingPath;
@@ -21,12 +21,22 @@ class VoiceRecordingService {
   Duration _recordingDuration = Duration.zero;
   bool _isRecording = false;
   bool _isPaused = false;
+  bool _isInitialized = false;
 
   // Getters
   bool get isRecording => _isRecording;
   bool get isPaused => _isPaused;
   Duration get recordingDuration => _recordingDuration;
   String? get recordingPath => _recordingPath;
+
+  // Inicializar o recorder
+  Future<void> _initializeRecorder() async {
+    if (_isInitialized) return;
+    
+    _recorder = FlutterSoundRecorder();
+    await _recorder!.openRecorder();
+    _isInitialized = true;
+  }
 
   // Iniciar gravação
   Future<bool> startRecording() async {
@@ -37,25 +47,39 @@ class VoiceRecordingService {
         return false;
       }
 
+      // Inicializar recorder se necessário
+      await _initializeRecorder();
+
       // Parar qualquer gravação anterior
       await stopRecording();
 
       // Obter diretório temporário
       final tempDir = await getTemporaryDirectory();
-      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.aac';
       _recordingPath = path.join(tempDir.path, fileName);
 
-      // Simular início da gravação
+      // Configurar gravação com melhor qualidade
+      await _recorder!.setSubscriptionDuration(Duration(milliseconds: 100));
+      
+      // Iniciar gravação real
+      await _recorder!.startRecorder(
+        toFile: _recordingPath!,
+        codec: Codec.aacADTS,
+        bitRate: 128000,
+        sampleRate: 44100,
+        numChannels: 2,
+      );
+
       _isRecording = true;
       _isPaused = false;
       _recordingDuration = Duration.zero;
       
       // Iniciar timer para atualizar duração
-      _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        _recordingDuration = Duration(seconds: timer.tick);
+      _recordingTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
+        _recordingDuration = Duration(milliseconds: timer.tick * 100);
       });
 
-      print('[VOICE_RECORDING] Recording started (simulated): $_recordingPath');
+      print('[VOICE_RECORDING] Recording started: $_recordingPath');
       return true;
     } catch (e) {
       print('[VOICE_RECORDING] Exception starting recording: $e');
@@ -66,11 +90,12 @@ class VoiceRecordingService {
   // Pausar gravação
   Future<bool> pauseRecording() async {
     try {
-      if (!_isRecording || _isPaused) return false;
+      if (!_isRecording || _isPaused || _recorder == null) return false;
 
+      await _recorder!.pauseRecorder();
       _isPaused = true;
       _recordingTimer?.cancel();
-      print('[VOICE_RECORDING] Recording paused (simulated)');
+      print('[VOICE_RECORDING] Recording paused');
       return true;
     } catch (e) {
       print('[VOICE_RECORDING] Exception pausing recording: $e');
@@ -81,16 +106,17 @@ class VoiceRecordingService {
   // Retomar gravação
   Future<bool> resumeRecording() async {
     try {
-      if (!_isRecording || !_isPaused) return false;
+      if (!_isRecording || !_isPaused || _recorder == null) return false;
 
+      await _recorder!.resumeRecorder();
       _isPaused = false;
       
       // Reiniciar timer
-      _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        _recordingDuration = Duration(seconds: timer.tick);
+      _recordingTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
+        _recordingDuration = Duration(milliseconds: timer.tick * 100);
       });
 
-      print('[VOICE_RECORDING] Recording resumed (simulated)');
+      print('[VOICE_RECORDING] Recording resumed');
       return true;
     } catch (e) {
       print('[VOICE_RECORDING] Exception resuming recording: $e');
@@ -101,20 +127,21 @@ class VoiceRecordingService {
   // Parar gravação
   Future<String?> stopRecording() async {
     try {
-      if (!_isRecording) return null;
+      if (!_isRecording || _recorder == null) return null;
 
+      await _recorder!.stopRecorder();
+      
       _isRecording = false;
       _isPaused = false;
       _recordingTimer?.cancel();
       _recordingTimer = null;
 
-      // Simular arquivo gravado
       if (_recordingPath != null) {
         final file = File(_recordingPath!);
-        // Criar arquivo vazio para simular gravação
-        await file.writeAsString('Simulated audio recording');
-        print('[VOICE_RECORDING] Recording stopped (simulated): $_recordingPath');
-        return _recordingPath;
+        if (await file.exists()) {
+          print('[VOICE_RECORDING] Recording stopped: $_recordingPath');
+          return _recordingPath;
+        }
       }
 
       print('[VOICE_RECORDING] Failed to stop recording');
@@ -128,8 +155,10 @@ class VoiceRecordingService {
   // Cancelar gravação
   Future<void> cancelRecording() async {
     try {
-      if (!_isRecording) return;
+      if (!_isRecording || _recorder == null) return;
 
+      await _recorder!.stopRecorder();
+      
       _isRecording = false;
       _isPaused = false;
       _recordingTimer?.cancel();
@@ -144,7 +173,7 @@ class VoiceRecordingService {
       }
 
       _recordingPath = null;
-      print('[VOICE_RECORDING] Recording cancelled (simulated)');
+      print('[VOICE_RECORDING] Recording cancelled');
     } catch (e) {
       print('[VOICE_RECORDING] Exception cancelling recording: $e');
     }
