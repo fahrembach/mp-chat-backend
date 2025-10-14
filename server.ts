@@ -789,6 +789,41 @@ const requestHandler = async (req: IncomingMessage, res: ServerResponse) => {
         return sendJson(res, 200, { message: 'Reaction removed successfully' });
     }
 
+    // --- Shared Video Routes (RAVE Style) ---
+    if (path.startsWith('/api/shared-videos')) {
+        const userId = getAuthUserId(req);
+        if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+
+        if (path === '/api/shared-videos' && method === 'GET') {
+            console.log('-> [SHARED_VIDEOS] Fetching shared videos...');
+            // Implementar busca de vídeos compartilhados
+            return sendJson(res, 200, []);
+        }
+
+        if (path === '/api/shared-videos' && method === 'POST') {
+            console.log('-> [SHARED_VIDEOS] Creating shared video session...');
+            const body = await getBody(req);
+            const { videoUrl, videoType, participants } = body; // videoType: 'local' | 'youtube'
+            
+            const sessionId = uuidv4();
+            // Implementar criação de sessão de vídeo compartilhado
+            return sendJson(res, 201, {
+                sessionId,
+                videoUrl,
+                videoType,
+                participants,
+                createdAt: new Date()
+            });
+        }
+
+        if (path.match(/^\/api\/shared-videos\/[^\/]+$/) && method === 'DELETE') {
+            const sessionId = path.split('/')[3];
+            console.log(`-> [SHARED_VIDEOS] Ending session ${sessionId}...`);
+            // Implementar fim de sessão
+            return sendJson(res, 200, { message: 'Session ended successfully' });
+        }
+    }
+
     // --- File Upload Routes ---
     if (path === '/api/upload' && method === 'POST') {
         const userId = getAuthUserId(req);
