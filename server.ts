@@ -7,7 +7,7 @@ import { setupSocket } from './lib/socket';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as multer from 'multer';
+import multer from 'multer';
 import * as sharp from 'sharp';
 
 const port = process.env.PORT || 3001;
