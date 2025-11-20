@@ -37,25 +37,6 @@ export const ChatRoom: React.FC = () => {
     }, [id, addMessage]);
 
     const handleSendMessage = (text: string) => {
-        if (socket && id && currentUser) {
-            const messageData = {
-                receiverId: id, // Assuming 1-on-1 for now, or this is the group ID
-                content: text,
-                type: 'text'
-            };
-
-            socket.emit('sendMessage', messageData);
-
-            // Optimistic update (optional, but good for UX)
-            // The socket 'messageSent' event will confirm it.
-            // For now, we rely on the 'messageSent' event from the server to add it to the UI
-            // to ensure consistency.
-        }
-    };
-
-    const chatMessages = id ? messages[id] || [] : [];
-
-    return (
         <div className="flex flex-col h-full bg-whatsapp-chatBg relative">
             {/* Background Doodle */}
             <div className="absolute inset-0 bg-chat-doodles opacity-40 pointer-events-none" />
@@ -103,7 +84,7 @@ export const ChatRoom: React.FC = () => {
 
             {/* Input Area */}
             <div className="z-10">
-                <InputBar onSend={handleSendMessage} />
+                <InputBar onSend={handleSendMessage} onSendMedia={handleSendMedia} />
             </div>
         </div>
     );

@@ -1,19 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Smile, Paperclip, Camera, Mic, Send, Lock, FileText, Image, Headphones, MapPin, User, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import { uploadFile, getMediaType } from '../../../services/uploadService';
+import { MessageType } from '../../../types';
 
 interface InputBarProps {
     onSend?: (text: string) => void;
+    onSendMedia?: (mediaUrl: string, type: MessageType, fileName?: string) => void;
 }
 
-export const InputBar: React.FC<InputBarProps> = ({ onSend }) => {
+export const InputBar: React.FC<InputBarProps> = ({ onSend, onSendMedia }) => {
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [isLocked, setIsLocked] = useState(false);
     const [showAttachments, setShowAttachments] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isRecording) {
@@ -63,14 +69,68 @@ export const InputBar: React.FC<InputBarProps> = ({ onSend }) => {
         setIsLocked(false);
     };
 
+    const handleFileUpload = async (file: File) => {
+        if (!onSendMedia) return;
+
+        setIsUploading(true);
+        setShowAttachments(false);
+
+        try {
+            const { url } = await uploadFile(file);
+            const mediaType = getMediaType(file);
+            onSendMedia(url, mediaType, file.name);
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            alert('Erro ao enviar arquivo. Tente novamente.');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleFileSelect = (type: 'document' | 'image') => {
+        const input = type === 'document' ? fileInputRef.current : imageInputRef.current;
+        input?.click();
+    };
+
     return (
         <div className="relative">
+            {/* Hidden File Inputs */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="*/*"
+                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+            />
+            <input
+                ref={imageInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,video/*"
+                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+            />
+
             {/* Attachment Menu (Bottom Sheet) */}
             {showAttachments && (
                 <div className="absolute bottom-16 left-2 bg-white rounded-xl shadow-xl p-4 grid grid-cols-3 gap-4 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200 mb-2">
-                    <AttachmentItem icon={<FileText size={24} />} color="bg-indigo-500" label="Documento" />
-                    <AttachmentItem icon={<Camera size={24} />} color="bg-pink-500" label="Câmera" />
-                    <AttachmentItem icon={<Image size={24} />} color="bg-purple-500" label="Galeria" />
+                    <AttachmentItem
+                        icon={<FileText size={24} />}
+                        color="bg-indigo-500"
+                        label="Documento"
+                        onClick={() => handleFileSelect('document')}
+                    />
+                    <AttachmentItem
+                        icon={<Camera size={24} />}
+                        color="bg-pink-500"
+                        label="Câmera"
+                        onClick={() => handleFileSelect('image')}
+                    />
+                    <AttachmentItem
+                        icon={<Image size={24} />}
+                        color="bg-purple-500"
+                        label="Galeria"
+                        onClick={() => handleFileSelect('image')}
+                    />
                     <AttachmentItem icon={<Headphones size={24} />} color="bg-orange-500" label="Áudio" />
                     <AttachmentItem icon={<MapPin size={24} />} color="bg-green-500" label="Localização" />
                     <AttachmentItem icon={<User size={24} />} color="bg-blue-500" label="Contato" />
@@ -158,8 +218,11 @@ export const InputBar: React.FC<InputBarProps> = ({ onSend }) => {
     );
 };
 
-const AttachmentItem: React.FC<{ icon: React.ReactNode; color: string; label: string }> = ({ icon, color, label }) => (
-    <div className="flex flex-col items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+const AttachmentItem: React.FC<{ icon: React.ReactNode; color: string; label: string; onClick?: () => void }> = ({ icon, color, label, onClick }) => (
+    <div
+        className="flex flex-col items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={onClick}
+    >
         <div className={clsx("w-14 h-14 rounded-full flex items-center justify-center text-white shadow-md", color)}>
             {icon}
         </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Message } from '../../../types';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, FileText, Download } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 
@@ -9,7 +9,64 @@ interface MessageBubbleProps {
     isOwn: boolean;
 }
 
+const MediaContent: React.FC<{ message: Message }> = ({ message }) => {
+    if (!message.mediaUrl) return null;
+
+    switch (message.type) {
+        case 'image':
+            return (
+                <img
+                    src={message.mediaUrl}
+                    alt="Imagem"
+                    className="rounded-lg max-w-full h-auto mb-1"
+                    loading="lazy"
+                />
+            );
+
+        case 'video':
+            return (
+                <video
+                    src={message.mediaUrl}
+                    controls
+                    className="rounded-lg max-w-full h-auto mb-1"
+                    preload="metadata"
+                />
+            );
+
+        case 'audio':
+            return (
+                <audio
+                    src={message.mediaUrl}
+                    controls
+                    className="w-full mb-1"
+                    preload="metadata"
+                />
+            );
+
+        case 'document':
+            return (
+                <a
+                    href={message.mediaUrl}
+                    download={message.fileName}
+                    className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg mb-1 hover:bg-gray-200 transition-colors"
+                >
+                    <FileText size={24} className="text-gray-600" />
+                    <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{message.fileName || 'Documento'}</div>
+                        {message.fileSize && <div className="text-xs text-gray-500">{message.fileSize}</div>}
+                    </div>
+                    <Download size={20} className="text-gray-600" />
+                </a>
+            );
+
+        default:
+            return null;
+    }
+};
+
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn }) => {
+    const hasMedia = message.mediaUrl && message.type !== 'text';
+
     return (
         <div className={clsx(
             "flex w-full mb-2 relative",
@@ -34,14 +91,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn }) 
             </div>
 
             <div className={clsx(
-                "relative max-w-[65%] rounded-lg p-2 shadow-sm text-sm z-10",
+                "relative max-w-[65%] rounded-lg shadow-sm text-sm z-10",
+                hasMedia ? "p-1" : "p-2",
                 isOwn ? "bg-whatsapp-outgoing rounded-tr-none" : "bg-white rounded-tl-none"
             )}>
-                <div className="mb-1 break-words leading-relaxed text-whatsapp-messageText">
-                    {message.content}
-                </div>
+                {/* Media Content */}
+                {hasMedia && <MediaContent message={message} />}
 
-                <div className="flex justify-end items-center gap-1 select-none">
+                {/* Text Content */}
+                {message.content && (
+                    <div className={clsx(
+                        "break-words leading-relaxed text-whatsapp-messageText",
+                        hasMedia ? "px-1 pb-1" : "mb-1"
+                    )}>
+                        {message.content}
+                    </div>
+                )}
+
+                {/* Timestamp and Status */}
+                <div className={clsx(
+                    "flex justify-end items-center gap-1 select-none",
+                    hasMedia && "px-1 pb-1"
+                )}>
                     <span className="text-[11px] text-whatsapp-secondaryText min-w-fit">
                         {format(new Date(message.timestamp), 'HH:mm')}
                     </span>
