@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+    --color-whatsapp-primary: #00a884;
+    --color-whatsapp-secondary: #008069;
+    --color-whatsapp-background: #e9edef;
+    --color-whatsapp-chatBg: #efeae2;
+    --color-whatsapp-outgoing: #d9fdd3;
+    --color-whatsapp-incoming: #ffffff;
+    --color-whatsapp-messageText: #111b21;
+    --color-whatsapp-secondaryText: #667781;
+    --color-whatsapp-danger: #ea0038;
+
+    --background-image-chat-doodles: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+}
+
+body {
+    @apply bg-whatsapp-background text-whatsapp-messageText;
+    font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}

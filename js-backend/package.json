@@ -1,0 +1,54 @@
+{
+  "name": "mp-chat-backend",
+  "version": "1.0.0",
+  "description": "Backend API server for m-p-chat Flutter application using SQLite and Socket.IO with complete features.",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "nodemon --exec \"npx tsx server.ts\" --watch server.ts --watch prisma --ext ts",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
+    "build": "prisma generate",
+    "dev:log": "nodemon --exec \"npx tsx server.ts\" --watch server.ts --watch prisma --ext ts > dev.log 2>&1",
+    "db:push": "prisma db push",
+    "db:push:reset": "prisma db push --force-reset",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.11.1",
+    "axios": "^1.13.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "cross-env": "^10.1.0",
+    "crypto": "^1.0.1",
+    "express": "^4.21.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "prisma": "^6.11.1",
+    "rate-limiter-flexible": "^5.0.3",
+    "sharp": "^0.33.5",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "tsx": "^4.20.3",
+    "uuid": "^11.1.0",
+    "zod": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20",
+    "@types/uuid": "^10.0.0",
+    "autoprefixer": "^10.4.22",
+    "nodemon": "^3.1.10",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
